@@ -27,4 +27,6 @@ metrics = model.val(
 print('mAP50-95:', metrics.box.map)
 print('mAP50:', metrics.box.map50)
 print('mAP75:', metrics.box.map75)
+
+# TODO filter classes 1 (bycicle) and 2 (car) in COCO dataset
 print('mAP50-95 for each category:', metrics.box.maps)
