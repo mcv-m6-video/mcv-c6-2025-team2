@@ -59,8 +59,19 @@ def create_symlinks(strategy, images_dir, labels_dir, output_base_dir, k=4):
     num_images = len(image_files)
 
     random.seed(42)
+
+    if strategy == 'all_val':
+        output_dir = os.path.join(output_base_dir, "yolo_task1.1")
+        os.makedirs(output_dir, exist_ok=True)
+        for folder in ["images/val", "labels/val"]:
+            os.makedirs(os.path.join(output_dir, folder), exist_ok=True)
+        
+        for img in image_files:
+            label = img.replace(".jpg", ".txt")
+            os.symlink(os.path.join(images_dir, img), os.path.join(output_dir, "images/val", img))
+            os.symlink(os.path.join(labels_dir, label), os.path.join(output_dir, "labels/val", label))
     
-    if strategy == "A":
+    elif strategy == "A":
         output_dir = os.path.join(output_base_dir, "yolo_A")
         os.makedirs(output_dir, exist_ok=True)
         for folder in ["images/train", "images/val", "labels/train", "labels/val"]:
@@ -105,7 +116,7 @@ def create_symlinks(strategy, images_dir, labels_dir, output_base_dir, k=4):
                 os.symlink(os.path.join(labels_dir, label), os.path.join(output_dir, "labels/val", label))
 
 if __name__ == "__main__":
-    data_path = "../data"
+    data_path = "../../data"
     video_file = os.path.join(data_path, "vdo.avi")
     frames_dir = os.path.join(data_path, "frames")
     annotations_file = os.path.join(data_path, "ai_challenge_s03_c010-full_annotation.xml")
@@ -122,7 +133,7 @@ if __name__ == "__main__":
     parse_xml(annotations_file, yolo_annotations_dir, image_sample, class_mapping)
     
     print("Creating dataset splits...")
-    for strategy in ["A", "B", "C"]:
+    for strategy in ["all_val", "A", "B", "C"]:
         create_symlinks(strategy, frames_dir, yolo_annotations_dir, yolo_splits_dir)
     
     print("YOLO dataset created.")
