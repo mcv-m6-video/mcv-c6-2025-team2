@@ -17,6 +17,8 @@ In this directory, you can find the code used to perform the experiments in [Wee
 - [Task 2.3: IDF1, HOTA scores](#task-23-idf1-hota-scores)  
 
 ## ▶️ Setup
+
+### Dataset creation
 Create a directory `week2/data` and place the data files `vdo.avi` (video) and `ai_challenge_s03_c010-full_annotation.xml` (ground truth annotations) inside it.
 
 Then you can run the code to generate the dataset for YOLO (make sure you are working in `week2` directory):
@@ -27,6 +29,13 @@ python yolo/utils/create_yolo_dataset.py
 ```
 
 This will create the dataset required for object detection in your `week2/data` directory.
+
+### WandB logging
+To log your trainings in WandB, run the following command in your CLI:
+
+```
+yolo settings wandb=True
+```
 
 ## ➡️ Task 1: Object Detection
 TODO
