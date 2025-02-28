@@ -1,5 +1,5 @@
-path: ../data/yolo_splits/yolo_task1.1 # dataset root dir
-#train: images/train # train images (relative to 'path')
+path: /home/mmajo/MCV/C6/week2/data/yolo_splits/yolo_task1.1 # dataset root dir
+train: images/val # train images (relative to 'path')
 val: images/val # val images (relative to 'path')
 
 # Classes

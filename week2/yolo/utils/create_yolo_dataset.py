@@ -60,16 +60,23 @@ def create_symlinks(strategy, images_dir, labels_dir, output_base_dir, k=4):
 
     random.seed(42)
 
-    if strategy == 'all_val':
+    # New class mapping for 'yolo_annotations_task1.1'
+    class_mapping_task1_1 = {"car": 2, "bike": 1}
+
+    if strategy == 'off-shelf':
         output_dir = os.path.join(output_base_dir, "yolo_task1.1")
         os.makedirs(output_dir, exist_ok=True)
         for folder in ["images/val", "labels/val"]:
             os.makedirs(os.path.join(output_dir, folder), exist_ok=True)
         
+        # Create annotations in 'yolo_annotations_task1.1'
+        parse_xml(annotations_file, os.path.join(data_path, "yolo_annotations_task1.1"), image_sample, class_mapping_task1_1)
+        
+        # Create symlinks for the 'off-shelf' strategy
         for img in image_files:
             label = img.replace(".jpg", ".txt")
             os.symlink(os.path.join(images_dir, img), os.path.join(output_dir, "images/val", img))
-            os.symlink(os.path.join(labels_dir, label), os.path.join(output_dir, "labels/val", label))
+            os.symlink(os.path.join(data_path, "yolo_annotations_task1.1", label), os.path.join(output_dir, "labels/val", label))
     
     elif strategy == "A":
         output_dir = os.path.join(output_base_dir, "yolo_A")
@@ -115,8 +122,9 @@ def create_symlinks(strategy, images_dir, labels_dir, output_base_dir, k=4):
                 os.symlink(os.path.join(images_dir, img), os.path.join(output_dir, "images/val", img))
                 os.symlink(os.path.join(labels_dir, label), os.path.join(output_dir, "labels/val", label))
 
+
 if __name__ == "__main__":
-    data_path = "../../data"
+    data_path = "/home/mmajo/MCV/C6/week2/data"
     video_file = os.path.join(data_path, "vdo.avi")
     frames_dir = os.path.join(data_path, "frames")
     annotations_file = os.path.join(data_path, "ai_challenge_s03_c010-full_annotation.xml")
@@ -127,13 +135,13 @@ if __name__ == "__main__":
     class_mapping = {"car": 0, "bike": 1}
     
     print("Starting frame extraction...")
-    extract_frames(video_file, frames_dir)
+    #extract_frames(video_file, frames_dir)
     
     print("Converting annotations...")
-    parse_xml(annotations_file, yolo_annotations_dir, image_sample, class_mapping)
+    #parse_xml(annotations_file, yolo_annotations_dir, image_sample, class_mapping)
     
     print("Creating dataset splits...")
-    for strategy in ["all_val", "A", "B", "C"]:
+    for strategy in ["off-shelf", "A", "B", "C"]:
         create_symlinks(strategy, frames_dir, yolo_annotations_dir, yolo_splits_dir)
     
     print("YOLO dataset created.")
