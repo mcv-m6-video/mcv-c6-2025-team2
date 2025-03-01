@@ -3,12 +3,19 @@ import time
 import pickle
 import cv2
 from tqdm import tqdm
-
 from sort import Sort
+import xml.etree.ElementTree as ET
+
+import sys
+sys.path.append("week2/") 
+from metrics import create_data_for_hota, parse_bboxes_from_xml
+from tracking.TrackEval.hota import HOTA
 
 
-# Convert each frame list to a dictionary so we can easily access the name of the frame, e.g. '0001'
 def reformat_detections(seq_dets, start_number=0):
+    """
+    Convert each frame list to a dictionary so we can easily access the name of the frame.
+    """
     detections = {f"{i + start_number:04d}": seq_dets[i] for i in range(len(seq_dets))}
     return detections
 
@@ -16,15 +23,6 @@ def reformat_detections(seq_dets, start_number=0):
 def initialize_video_writer(first_frame_path, output_path=None, fps=30):
     """
     Initialize a video writer based on the dimensions of the first frame.
-    
-    Args:
-        first_frame_path: Path to the first frame image
-        output_path: Path where to save the output video
-        fps: Frames per second for the output video
-    
-    Returns:
-        video_writer: OpenCV VideoWriter object
-        width, height: Dimensions of the video
     """
     # Read first frame to get dimensions
     image = cv2.imread(first_frame_path)
@@ -45,17 +43,9 @@ def initialize_video_writer(first_frame_path, output_path=None, fps=30):
     return video_writer, width, height, image
 
 
-def process_frame_detections(detections, tracker):
+def track_objects_in_frame(detections, tracker):
     """
     Process frame detections and update tracker.
-    
-    Args:
-        detections: List of detections for current frame
-        tracker: SORT tracker object
-    
-    Returns:
-        tracked_objects: List of tracked objects with their IDs
-        processing_time: Time taken for processing
     """
     # Initialize the detection list for this frame
     dets = []
@@ -82,7 +72,7 @@ def process_frame_detections(detections, tracker):
 
 def visualize_tracked_objects(image, tracked_objects, object_colors):
     """
-    Draw tracked objects on the image with their IDs, using distinct colors.
+    Draw tracked objects on the image with their IDs, using distinct colors for each object.
     """
     # Create a copy of the image to avoid modifying the original
     result_image = image.copy()
@@ -115,22 +105,59 @@ def visualize_tracked_objects(image, tracked_objects, object_colors):
     return result_image, object_colors
 
 
-def track_objects(detections_dict, image_folder, output_video_path=None, fps=30):
+def get_tracking(detections_dict: dict, image_folder: str, 
+                 generate_video: bool=False, fps: int=30, output_video_path:str="tracking_results.mp4"):
     """
-    Main function for object tracking visualization.
-    """
-    first_frame_key = list(detections_dict.keys())[0]
-    first_frame_path = f"{image_folder}/frame_{first_frame_key}.jpg"
+    Process the detections to get tracking statistics and optionally create a video visualization.
     
-    try:
+    Args:
+        detections_dict: Dictionary mapping frame IDs to detection lists
+        image_folder: Folder containing the frame images
+        generate_video: Boolean indicating whether to generate a video visualization
+        fps: Frames per second for the output video
+        output_video_path: Path where to save the output video (if generate_video is True)
+    
+    Returns:
+        dict: Dictionary containing tracking statistics including:
+            - num_tracker_dets: Total number of tracker detections
+            - num_tracker_ids: Total number of unique tracker IDs
+            - tracker_ids: List of lists containing tracker IDs for each frame
+    """
+
+    mot_tracker = Sort()
+    
+    # Processing statistics
+    total_time = 0
+    total_frames = 0
+    all_tracker_ids = set()  # All unique tracker IDs across all frames
+    tracker_ids_by_frame = []  # IDs in each frame
+    all_tracker_detections = 0  # Total detection count
+    
+    if generate_video:
+        first_frame_key = list(detections_dict.keys())[0]
+        first_frame_path = f"{image_folder}/frame_{first_frame_key}.jpg"
         video_writer, _, _, _ = initialize_video_writer(first_frame_path, output_video_path, fps)
-        mot_tracker = Sort()
-        
-        total_time = 0
-        total_frames = 0
         object_colors = {}  # Dictionary to store consistent colors per object ID
+    
+
+    for frame_key, frame_detections in tqdm(detections_dict.items(), desc="Processing frames", unit="frame"):
+        # Process detections and update tracker
+        tracked_objects, processing_time = track_objects_in_frame(frame_detections, mot_tracker)
         
-        for frame_key, frame_detections in tqdm(detections_dict.items(), desc="Processing frames", unit="frame"):
+        # Update statistics
+        total_time += processing_time
+        total_frames += 1
+        
+        # Extract IDs from this frame's tracked objects
+        frame_ids = np.array([int(obj[4]) for obj in tracked_objects])
+        tracker_ids_by_frame.append(frame_ids)
+        
+        # Update unique IDs and detection count
+        all_tracker_ids.update(frame_ids)
+        all_tracker_detections += len(tracked_objects)
+        
+        if generate_video:
+            # Load the corresponding image for the frame
             frame_path = f"{image_folder}/frame_{frame_key}.jpg"
             image = cv2.imread(frame_path)
             
@@ -138,27 +165,24 @@ def track_objects(detections_dict, image_folder, output_video_path=None, fps=30)
                 print(f"Could not load image {frame_path}")
                 continue
             
-            tracked_objects, processing_time = process_frame_detections(frame_detections, mot_tracker)
-            total_time += processing_time
-            total_frames += 1
-            
+            # Visualize tracking results
             result_image, object_colors = visualize_tracked_objects(image, tracked_objects, object_colors)
+            
+            # Write the processed frame to the video
             video_writer.write(result_image)
-        
-        video_writer.release()
-        
-        print(f"Video saved at {output_video_path}")
-        print(f"Total processing time: {total_time:.2f} seconds")
-        if total_frames > 0:
-            print(f"Average processing time per frame: {total_time/total_frames:.4f} seconds")
-            print(f"Effective frame rate: {total_frames/total_time:.2f} FPS")
     
-    except Exception as e:
-        print(f"Error during tracking: {e}")
-        try:
-            video_writer.release()
-        except:
-            pass
+    if generate_video:
+        video_writer.release()
+        print(f"Tracking visualization saved at {output_video_path}")
+    
+    # Compile statistics dictionary
+    stats = {
+        "num_tracker_dets": all_tracker_detections,
+        "num_tracker_ids": len(all_tracker_ids),
+        "tracker_ids": tracker_ids_by_frame,
+    }
+    
+    return stats
 
 
 if __name__ == "__main__":
@@ -167,10 +191,33 @@ if __name__ == "__main__":
     with open("week2/tracking/preds_pred_off-shelf.pkl", "rb") as f:
         seq_dets = pickle.load(f)
     
+    # Prepare data for tracker
     detections = reformat_detections(seq_dets, start_number=535)
-
-    # Get frames (they should be extracteded from the video and downloaded as .jpg)
     frames_dir = 'data/AICity_data/frames'
 
-    # Call the tracking function
-    track_objects(detections, frames_dir, "object_tracking.mp4", fps=10)
+    # Process tracking and optionally create visualization
+    tracking_stats = get_tracking(detections, frames_dir, 
+                                  generate_video=True, fps=10, output_video_path="object_tracking.mp4")
+    
+    # Print statistics
+    if tracking_stats:
+        print("\n=== Tracking Statistics ===")
+        print(f"Total tracker detections: {tracking_stats['num_tracker_dets']}")
+        print(f"Total unique tracker IDs: {tracking_stats['num_tracker_ids']}")
+
+    # Evaluation - HOTA
+    # Bboxes detected and GT
+    detected_bboxes = [[d['bbox'] for d in sublist] for sublist in seq_dets]
+    file_path = '/Users/arnaubarrera/Desktop/MSc Computer Vision/C6. Video Analysis/mcv-c6-2025-team2/data/ai_challenge_s03_c010-full_annotation.xml'
+    gt_bboxes = parse_bboxes_from_xml(file_path)
+
+    data = create_data_for_hota(gt_bboxes, detected_bboxes, tracking_stats)
+    
+    # Crear instancia de HOTA
+    hota_metric = HOTA()
+
+    # Calcular métricas para una secuencia
+    results = hota_metric.eval_sequence(data)
+
+    # Mostrar los resultados
+    print(results)
