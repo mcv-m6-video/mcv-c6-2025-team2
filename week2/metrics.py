@@ -2,6 +2,10 @@ import numpy as np
 from typing import Optional, Dict, List
 from dataclasses import dataclass
 
+import xml.etree.ElementTree as ET
+import numpy as np
+from collections import defaultdict
+
 @dataclass
 class Bbox:
     x1: float
@@ -160,4 +164,44 @@ def compute_mAP_with_confidence(
     # Compute mAP
     return voc_eval(gt, preds, iou_threshold, use_confidence = True)
 
-        
+########################
+####### TASK 2.3 #######
+########################
+
+def parse_xml_HOTA(file_path: str) -> dict:
+    "Reads the GT file and returns a dictionary prepared for the HOTA metric."
+    
+    # Parse the XML file
+    tree = ET.parse(file_path)
+    root = tree.getroot()
+
+    # Inicializamos los datos que necesitamos
+    gt_ids = defaultdict(list)
+    num_gt_dets = 0
+    unique_ids = set()
+
+    # Iteramos a través de los tracks
+    for track in root.findall('track'):
+        track_id = int(track.get('id'))
+        unique_ids.add(track_id)  # Agregar track_id al conjunto de IDs únicos
+        frames = []
+
+        # Iteramos a través de las cajas dentro de cada track
+        for box in track.findall('box'):
+            frame = int(box.get('frame'))
+            # Almacenamos el ID del track en cada frame
+            gt_ids[frame].append(track_id)
+            num_gt_dets += 1
+
+        # No es necesario contar el número de IDs únicos aquí porque lo hacemos con el conjunto unique_ids
+
+    num_gt_ids = len(unique_ids)  # Número total de IDs únicos
+
+    # Creamos el diccionario con los resultados
+    result = {
+        "num_gt_dets": num_gt_dets,
+        "num_gt_ids": num_gt_ids,
+        "gt_ids": [np.array(gt_ids[frame]) for frame in sorted(gt_ids.keys())]
+    }
+
+    return result
