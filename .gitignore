@@ -1,3 +1,4 @@
 **/data/*
 *.pt
 *_output
+**/__pycache__/*

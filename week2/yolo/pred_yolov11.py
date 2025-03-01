@@ -33,7 +33,7 @@ preds = model.predict(
     save = True
 )
 
-preds = format_yolo_predictions(preds, class_mapping = {1: 'car', 2: 'bike'})
+preds = format_yolo_predictions(preds, class_mapping = {1: 'bike', 2: 'car'})
 
 # Save to pkl file
 save_dir = os.path.join(project, name)
