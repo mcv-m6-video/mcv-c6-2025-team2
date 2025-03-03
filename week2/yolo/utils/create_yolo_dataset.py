@@ -124,7 +124,8 @@ def create_symlinks(strategy, images_dir, labels_dir, output_base_dir, k=4):
 
 
 if __name__ == "__main__":
-    data_path = "/home/mmajo/MCV/C6/week2/data"
+    # data_path = "/home/mmajo/MCV/C6/week2/data"
+    data_path = "/home/alex/Documents/MCV/C6/mcv-c6-2025-team2/week2/data"
     video_file = os.path.join(data_path, "vdo.avi")
     frames_dir = os.path.join(data_path, "frames")
     annotations_file = os.path.join(data_path, "ai_challenge_s03_c010-full_annotation.xml")
@@ -135,10 +136,10 @@ if __name__ == "__main__":
     class_mapping = {"car": 0, "bike": 1}
     
     print("Starting frame extraction...")
-    #extract_frames(video_file, frames_dir)
+    extract_frames(video_file, frames_dir)
     
     print("Converting annotations...")
-    #parse_xml(annotations_file, yolo_annotations_dir, image_sample, class_mapping)
+    parse_xml(annotations_file, yolo_annotations_dir, image_sample, class_mapping)
     
     print("Creating dataset splits...")
     for strategy in ["off-shelf", "A", "B", "C"]:

@@ -6,10 +6,10 @@ model = YOLO("yolo11m.pt")
 # Train the model
 # https://docs.ultralytics.com/modes/train/#train-settings
 results = model.train(
-    data="config/task1.2.yaml",
-    epochs=100,
-    patience = 200,
-    batch = 16,
+    data="./config/task1.2.yaml",
+    epochs=1,
+    patience = 200,  # No crec que tingui sentit posar aqui 200 si les epochs son 100
+    batch = 2,
     imgsz = 640,
     save = True,
     save_period = -1,
@@ -40,5 +40,5 @@ results = model.train(
     dfl = 1.5,
     dropout = 0.0,
     val = False,
-    plots = True
+    plots = True,
     )

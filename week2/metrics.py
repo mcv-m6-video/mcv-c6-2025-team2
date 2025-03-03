@@ -1,9 +1,6 @@
 import numpy as np
 from typing import Optional, Dict, List
 from dataclasses import dataclass
-
-import xml.etree.ElementTree as ET
-import numpy as np
 from collections import defaultdict
 
 @dataclass
@@ -24,7 +21,6 @@ class Prediction:
     class_name: str
     confidence: Optional[float] = None
 
-
 def voc_ap(rec: np.ndarray, prec: np.ndarray) -> float:
     """
     Compute VOC AP given precision and recall using the VOC 07 11-point method.
@@ -39,7 +35,7 @@ def voc_iou(pred: List[int], gt: List[List[int]]) -> np.ndarray:
     """
     Compute IoU between a predicted bounding box and multiple ground truth boxes.
     """
-    gt = np.array(gt)  # Convert ground truth to numpy array
+    gt = np.array(gt)  
     if gt.size == 0:
         return np.array([])
 
@@ -52,89 +48,102 @@ def voc_iou(pred: List[int], gt: List[List[int]]) -> np.ndarray:
     ih = np.maximum(iymax - iymin, 0)
     inters = iw * ih
 
-    # Compute union
     pred_area = (pred[2] - pred[0]) * (pred[3] - pred[1])
     gt_areas = (gt[:, 2] - gt[:, 0]) * (gt[:, 3] - gt[:, 1])
     uni = pred_area + gt_areas - inters
 
-    return inters / uni  # IoU values for each ground truth box
+    return inters / uni
 
 def voc_eval(
     gt: Dict[str, List[Annotation]], 
     preds: Dict[str, List[Prediction]], 
     ovthresh: float = 0.5,
     use_confidence: bool = True
-) -> float:
+) -> Dict[str, float]:
     """
     Evaluate predictions against ground truth bounding boxes using PASCAL VOC metrics.
+    Supports multiple classes and returns AP for each class.
     """
-    class_recs = {}
-    npos = 0
-
-    # Convert ground truth annotations to a structured dictionary
+    # Group ground truth and predictions by class
+    class_annotations = defaultdict(lambda: defaultdict(list))
+    class_predictions = defaultdict(lambda: defaultdict(list))
+    
     for image_id, annotations in gt.items():
-        bboxes = np.array([[ann.bbox.x1, ann.bbox.y1, ann.bbox.x2, ann.bbox.y2] for ann in annotations])
-        class_recs[image_id] = {"bbox": bboxes, "det": [False] * len(annotations)}
-        npos += len(annotations)
-
-    image_ids = []
-    confidence = []
-    BB = []
-
-    # Extract predictions
+        for ann in annotations:
+            class_annotations[ann.class_name][image_id].append(ann)
+    
     for image_id, predictions in preds.items():
         for pred in predictions:
-            image_ids.append(image_id)
-            confidence.append(pred.confidence if use_confidence else np.random.rand())
-            BB.append([pred.bbox.x1, pred.bbox.y1, pred.bbox.x2, pred.bbox.y2])
+            class_predictions[pred.class_name][image_id].append(pred)
 
-    confidence = np.array(confidence)
-    BB = np.array(BB)
+    # Compute AP per class
+    ap_per_class = {}
 
-    # Sort predictions by confidence
-    if confidence.size > 0:
-        sorted_ind = np.argsort(-confidence)
-        BB = BB[sorted_ind]
-        image_ids = [image_ids[i] for i in sorted_ind]
+    for class_name in class_annotations.keys():
+        class_recs = {}
+        npos = 0
 
-    # Evaluate detections
-    nd = len(image_ids)
-    tp = np.zeros(nd)
-    fp = np.zeros(nd)
-    iou_scores = np.zeros(nd)
+        # Convert ground truth annotations to a structured dictionary
+        for image_id, annotations in class_annotations[class_name].items():
+            bboxes = np.array([[ann.bbox.x1, ann.bbox.y1, ann.bbox.x2, ann.bbox.y2] for ann in annotations])
+            class_recs[image_id] = {"bbox": bboxes, "det": [False] * len(annotations)}
+            npos += len(annotations)
 
-    for d in range(nd):
-        image_id = image_ids[d]
-        R = class_recs.get(image_id, {"bbox": np.array([]), "det": []})
-        bb = BB[d]
-        BBGT = R["bbox"]
+        image_ids = []
+        confidence = []
+        BB = []
 
-        if BBGT.size > 0:
-            overlaps = voc_iou(bb, BBGT)
-            ovmax = np.max(overlaps)
-            jmax = np.argmax(overlaps)
-            iou_scores[d] = ovmax
+        # Extract predictions
+        for image_id, predictions in class_predictions[class_name].items():
+            for pred in predictions:
+                image_ids.append(image_id)
+                confidence.append(pred.confidence if use_confidence else np.random.rand())
+                BB.append([pred.bbox.x1, pred.bbox.y1, pred.bbox.x2, pred.bbox.y2])
 
-            if ovmax > ovthresh:
-                if not R["det"][jmax]:
-                    tp[d] = 1.0
-                    R["det"][jmax] = True
+        confidence = np.array(confidence)
+        BB = np.array(BB)
+
+        # Sort predictions by confidence
+        if confidence.size > 0:
+            sorted_ind = np.argsort(-confidence)
+            BB = BB[sorted_ind]
+            image_ids = [image_ids[i] for i in sorted_ind]
+
+        # Evaluate detections
+        nd = len(image_ids)
+        tp = np.zeros(nd)
+        fp = np.zeros(nd)
+
+        for d in range(nd):
+            image_id = image_ids[d]
+            R = class_recs.get(image_id, {"bbox": np.array([]), "det": []})
+            bb = BB[d]
+            BBGT = R["bbox"]
+
+            if BBGT.size > 0:
+                overlaps = voc_iou(bb, BBGT)
+                ovmax = np.max(overlaps)
+                jmax = np.argmax(overlaps)
+
+                if ovmax > ovthresh:
+                    if not R["det"][jmax]:
+                        tp[d] = 1.0
+                        R["det"][jmax] = True
+                    else:
+                        fp[d] = 1.0
                 else:
                     fp[d] = 1.0
             else:
                 fp[d] = 1.0
-        else:
-            fp[d] = 1.0
 
-    # Compute precision and recall
-    fp = np.cumsum(fp)
-    tp = np.cumsum(tp)
-    rec = tp / float(npos) if npos > 0 else np.zeros_like(tp)
-    prec = tp / np.maximum(tp + fp, np.finfo(np.float64).eps)
-    ap = voc_ap(rec, prec)
-    # iou_mean = np.mean(iou_scores)
+        # Compute precision and recall
+        fp = np.cumsum(fp)
+        tp = np.cumsum(tp)
+        rec = tp / float(npos) if npos > 0 else np.zeros_like(tp)
+        prec = tp / np.maximum(tp + fp, np.finfo(np.float64).eps)
+        ap_per_class[class_name] = voc_ap(rec, prec)
 
-    return ap
+    return ap_per_class
 
 def compute_mAP_no_confidence(
     gt: Dict[str, List[Annotation]],
@@ -145,13 +154,14 @@ def compute_mAP_no_confidence(
     """
     Compute mean Average Precision (mAP) without considering confidence scores.
     """
-    # Compute mAP
-    aps = [
-        voc_eval(gt, preds, iou_threshold, use_confidence = False)
+    aps_per_class = [
+        voc_eval(gt, preds, iou_threshold, use_confidence=False)
         for _ in range(iterations)
     ]
-    return np.mean(aps)
 
+    # Compute mean over iterations and classes
+    avg_ap_per_class = {cls: np.mean([ap[cls] for ap in aps_per_class if cls in ap]) for cls in aps_per_class[0]}
+    return np.mean(list(avg_ap_per_class.values()))
 
 def compute_mAP_with_confidence(
     gt: Dict[str, List[Annotation]],
@@ -161,8 +171,8 @@ def compute_mAP_with_confidence(
     """
     Compute mean Average Precision (mAP) considering confidence scores.
     """
-    # Compute mAP
-    return voc_eval(gt, preds, iou_threshold, use_confidence = True)
+    ap_per_class = voc_eval(gt, preds, iou_threshold, use_confidence=True)
+    return np.mean(list(ap_per_class.values()))
 
 
 ########################
