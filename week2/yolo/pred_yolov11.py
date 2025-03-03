@@ -1,5 +1,6 @@
 import os
 import pickle
+from natsort import natsorted
 
 from ultralytics import YOLO
 from utils.format_yolo_predictions import format_yolo_predictions
@@ -20,7 +21,7 @@ preds = model.predict(
     iou = 0.6,  # IoU threshold for NMS
     imgsz = 640,
     half = True,
-    device = 'cuda:0',
+    device = 'cuda:1',
     batch = 16,
     max_det = 300,
     visualize = False,
@@ -33,7 +34,8 @@ preds = model.predict(
     save = True
 )
 
-preds = format_yolo_predictions(preds, class_mapping = {1: 'bike', 2: 'car'})
+frames_names = natsorted(os.listdir(data_path))
+preds = format_yolo_predictions(preds, frames_names, class_mapping = {1: 'bike', 2: 'car'})
 
 # Save to pkl file
 save_dir = os.path.join(project, name)
