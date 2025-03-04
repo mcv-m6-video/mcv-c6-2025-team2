@@ -10,6 +10,7 @@ import sys
 sys.path.append("week2/") 
 from metrics import create_data_for_hota, parse_bboxes_from_xml
 from tracking.TrackEval.hota import HOTA
+from TrackEval.identity import Identity
 
 
 def reformat_detections(seq_dets, start_number=0):
@@ -129,8 +130,9 @@ def get_tracking(detections_dict: dict, image_folder: str,
     # Processing statistics
     total_time = 0
     total_frames = 0
-    all_tracker_ids = set()  # All unique tracker IDs across all frames
+    all_tracker_ids = []  # All unique tracker IDs across all frames
     tracker_ids_by_frame = []  # IDs in each frame
+    tracker_bboxes_by_frame = []  # IDs in each frame
     all_tracker_detections = 0  # Total detection count
     
     if generate_video:
@@ -147,13 +149,17 @@ def get_tracking(detections_dict: dict, image_folder: str,
         # Update statistics
         total_time += processing_time
         total_frames += 1
+
+        # Extract bboxes from this frame's tracked objects
+        frame_bboxes = [obj[:4] for obj in tracked_objects]
+        tracker_bboxes_by_frame.append(frame_bboxes)
         
         # Extract IDs from this frame's tracked objects
-        frame_ids = np.array([int(obj[4]) for obj in tracked_objects])
+        frame_ids = np.array([int(obj[4]-1) for obj in tracked_objects])
         tracker_ids_by_frame.append(frame_ids)
         
         # Update unique IDs and detection count
-        all_tracker_ids.update(frame_ids)
+        all_tracker_ids.extend(frame_ids)  
         all_tracker_detections += len(tracked_objects)
         
         if generate_video:
@@ -178,8 +184,9 @@ def get_tracking(detections_dict: dict, image_folder: str,
     # Compile statistics dictionary
     stats = {
         "num_tracker_dets": all_tracker_detections,
-        "num_tracker_ids": len(all_tracker_ids),
-        "tracker_ids": tracker_ids_by_frame,
+        "num_tracker_ids": max(np.unique(all_tracker_ids))+1,
+        "tracker_bboxes": tracker_bboxes_by_frame,
+        "tracker_ids": tracker_ids_by_frame
     }
     
     return stats
@@ -207,17 +214,17 @@ if __name__ == "__main__":
 
     # Evaluation - HOTA
     # Bboxes detected and GT
-    detected_bboxes = [[d['bbox'] for d in sublist] for sublist in seq_dets]
     file_path = '/Users/arnaubarrera/Desktop/MSc Computer Vision/C6. Video Analysis/mcv-c6-2025-team2/data/ai_challenge_s03_c010-full_annotation.xml'
     gt_bboxes = parse_bboxes_from_xml(file_path)
 
-    data = create_data_for_hota(gt_bboxes, detected_bboxes, tracking_stats)
+    data = create_data_for_hota(gt_bboxes, tracking_stats)
     
-    # Crear instancia de HOTA
+    # Compute HOTA and IDF1
     hota_metric = HOTA()
+    iden = Identity()
 
-    # Calcular métricas para una secuencia
-    results = hota_metric.eval_sequence(data)
+    results = []
+    results.append(hota_metric.eval_sequence(data))
+    results.append(iden.eval_sequence(data))
 
-    # Mostrar los resultados
     print(results)
