@@ -39,7 +39,7 @@ def read_pickle(file_path: str) -> List[Dict]:
 if __name__ == '__main__':
     DATA_PATH = '/home/alex/Downloads/'
     gt_file = os.path.join(DATA_PATH, 'gt.pkl')
-    preds_file = os.path.join(DATA_PATH, 'preds_pred_B_fold3.pkl')
+    preds_file = os.path.join(DATA_PATH, 'preds_pred_off-shelf_truck.pkl')
 
     gt = read_pickle(gt_file)
     gt = correct_gt_pickle(gt)
@@ -47,6 +47,7 @@ if __name__ == '__main__':
     preds = read_pickle(preds_file)
     preds = correct_preds_pickle(preds)
 
+    first_image = list(preds.keys())[0]
     mAP = compute_mAP(gt, preds)
 
     print(mAP)
