@@ -95,20 +95,43 @@ def plot_moving_average_video(mAP_dict: Dict[str, float], window_size=10, output
     # Initialize plots
     sc1, = ax.plot([], [], marker='o', linestyle='', color=dot_color_1, markersize=1.3, alpha=0.4)
     line1, = ax.plot([], [], linestyle='-', color=line_color_1, linewidth=3, alpha=0.8)
+    line2, = ax.plot([], [], linestyle='-', color=line_color_1, linewidth=3, alpha=0.8)
 
     # Create a PolyCollection for dynamic shading
     shading_poly = PolyCollection([], facecolor=training_shade_color, alpha=0.5)
     ax.add_collection(shading_poly)
 
-    def update(frame):
-        x_data = full_frame_range[:frame + 1]
-        y_data_1 = mAP_series[:frame + 1]
-        y_data_2 = moving_avg[:frame + 1]
+    # Get first element position in numpy array with np.nan
+    first_nan = np.where(np.isnan(mAP_series))[0][0] + 10
 
+    def update(frame, first_nan):
+        x_data = full_frame_range[:frame + 1]  # Full range up to current frame
+        y_data_1 = mAP_series[:frame + 1]      # mAP data up to current frame
+
+        # Splitting x_data and moving average into two parts
+        x_data1 = full_frame_range[:min(first_nan, frame + 1)]
+        x_data2 = full_frame_range[min(first_nan, frame + 1):frame + 1]
+
+        y_data_2 = moving_avg[:min(first_nan, frame + 1)]
+        y_data_3 = moving_avg[min(first_nan, frame + 1):frame + 1]
+
+        # Update scatter plot
         sc1.set_data(x_data, y_data_1)
-        
-        valid_indices = ~np.isnan(y_data_2)
-        line1.set_data(np.array(x_data)[valid_indices], np.array(y_data_2)[valid_indices])
+
+        # Filter valid (non-NaN) indices
+        valid_indices1 = ~np.isnan(y_data_2)
+        valid_indices2 = ~np.isnan(y_data_3)
+
+        # Ensure x_data1 and x_data2 are non-empty before setting the line data
+        if len(x_data1) > 0 and np.any(valid_indices1):
+            line1.set_data(np.array(x_data1)[valid_indices1], np.array(y_data_2)[valid_indices1])
+        else:
+            line1.set_data([], [])  # Clear if no valid data
+
+        if len(x_data2) > 0 and np.any(valid_indices2):
+            line2.set_data(np.array(x_data2)[valid_indices2], np.array(y_data_3)[valid_indices2])
+        else:
+            line2.set_data([], [])  # Clear if no valid data
 
         # Update the shading dynamically
         if missing_frames:
@@ -123,9 +146,9 @@ def plot_moving_average_video(mAP_dict: Dict[str, float], window_size=10, output
 
                 shading_poly.set_verts(segments)  # Update shading area
 
-        return sc1, line1, shading_poly
+        return sc1, line1, line2, shading_poly
 
-    ani = animation.FuncAnimation(fig, update, frames=len(full_frame_range), interval=50, blit=True)
+    ani = animation.FuncAnimation(fig, update, frames=len(full_frame_range), interval=50, blit=True, fargs=(first_nan,))
     ani.save(output_filename, writer="ffmpeg", fps=10)
     plt.close(fig)
 
