@@ -58,7 +58,6 @@ def voc_eval(
     gt: Dict[str, List[Annotation]], 
     preds: Dict[str, List[Prediction]], 
     ovthresh: float = 0.5,
-    use_confidence: bool = True
 ) -> Dict[str, float]:
     """
     Evaluate predictions against ground truth bounding boxes using PASCAL VOC metrics.
@@ -75,7 +74,7 @@ def voc_eval(
 
         # Get predictions for the frame
         predictions = preds.get(image_id, [])
-        confidence = np.array([pred.confidence if use_confidence else np.random.rand() for pred in predictions])
+        confidence = np.array([pred.confidence for pred in predictions])
         bboxes_pred = np.array([[pred.bbox.x1, pred.bbox.y1, pred.bbox.x2, pred.bbox.y2] for pred in predictions])
 
         # Sort predictions by confidence
