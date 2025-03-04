@@ -1,5 +1,6 @@
 import os
 import cv2
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
@@ -9,6 +10,7 @@ from evaluate import read_pickle, correct_gt_pickle, correct_preds_pickle
 from typing import List, Dict, Tuple
 from PIL import Image
 from concurrent.futures import ThreadPoolExecutor
+from matplotlib.collections import PolyCollection
 
 FRAMES_FOLDER = '/home/alex/Documents/MCV/C6/mcv-c6-2025-team2/week2/data/frames'
 DATA_PATH = '/home/alex/Downloads/'
@@ -64,70 +66,73 @@ def save_to_gif(frames: List[Image.Image], filename: str, sampling: int = 5):
     frames[0].save(filename, save_all=True, append_images=frames[sampling:-1:sampling], duration=50, loop=0)
 
 
-
-def plot_moving_average_video(mAP_dict: Dict[str, float], window_size: int = 10, output_filename="mAP_evolution.mp4"):
+def plot_moving_average_video(mAP_dict: Dict[str, float], window_size=10, output_filename="mAP_evolution.mp4"):
     """
-    Generates a video showing the evolution of the moving average plot over frames.
-    
-    Args:
-        mAP_dict: Dictionary where keys are frame_ids and values are mAP scores.
-        window_size: Size of the moving average window (default: 10).
-        output_filename: Output video file name (default: 'mAP_evolution.mp4').
+    Generates a video showing the evolution of the moving average plot over frames, 
+    dynamically shading missing training frames as the animation progresses.
     """
-    # Sort frame_ids based on numeric value extracted from the filename
     sorted_frame_ids = sorted(mAP_dict.keys(), key=lambda x: int(x.split('.')[0].split('_')[-1]))  
-    
-    # Extract numeric frame indices for labeling
     frame_numbers = [int(fid.split('.')[0].split('_')[-1]) for fid in sorted_frame_ids]
-    
-    # Extract mAP values in sorted order
-    mAP_values = [mAP_dict[frame_id] for frame_id in sorted_frame_ids]
 
-    # Compute moving average using Pandas
-    mAP_series = pd.Series(mAP_values)
+    full_frame_range = np.arange(0, 2141)
+    present_frames = set(frame_numbers)
+    missing_frames = [num for num in full_frame_range if num not in present_frames]
+
+    mAP_series = pd.Series({num: mAP_dict.get(f"frame_{num:04d}.jpg", np.nan) for num in full_frame_range})
     moving_avg = mAP_series.rolling(window=window_size, min_periods=1).mean()
 
-    # Custom colors for scatter and lines
     dot_color_1 = '#6fbeae'
     line_color_1 = '#274857'
+    training_shade_color = '#f4cccc'  # Light red
 
     fig, ax = plt.subplots(figsize=(10, 5))
     ax.set_xlim(0, max(frame_numbers))
-    ax.set_ylim(0, 1)  # Adjust as per your mAP values range
+    ax.set_ylim(0, 1)
     ax.set_xlabel("Frame")
     ax.set_ylabel("mAP")
     ax.set_title("mAP Evolution Over Time (Moving Average)")
 
-    # Initialize scatter plot and line for both mAP and moving average
+    # Initialize plots
     sc1, = ax.plot([], [], marker='o', linestyle='', color=dot_color_1, markersize=1.3, alpha=0.4)
     line1, = ax.plot([], [], linestyle='-', color=line_color_1, linewidth=3, alpha=0.8)
 
-    # Update function for animation
+    # Create a PolyCollection for dynamic shading
+    shading_poly = PolyCollection([], facecolor=training_shade_color, alpha=0.5)
+    ax.add_collection(shading_poly)
+
     def update(frame):
-        # Data for moving average and original mAP values
-        x_data = frame_numbers[:frame + 1]
-        y_data_1 = mAP_values[:frame + 1]
+        x_data = full_frame_range[:frame + 1]
+        y_data_1 = mAP_series[:frame + 1]
         y_data_2 = moving_avg[:frame + 1]
-        
-        # Update scatter and line for mAP and moving average
+
         sc1.set_data(x_data, y_data_1)
-        line1.set_data(x_data, y_data_2)
+        
+        valid_indices = ~np.isnan(y_data_2)
+        line1.set_data(np.array(x_data)[valid_indices], np.array(y_data_2)[valid_indices])
 
-        return sc1, line1
+        # Update the shading dynamically
+        if missing_frames:
+            current_max_frame = x_data[-1]  # The frame currently being animated
+            active_missing_frames = [f for f in missing_frames if f <= current_max_frame]
 
-    # Create animation
-    ani = animation.FuncAnimation(fig, update, frames=len(frame_numbers), interval=50, blit=True)
+            if active_missing_frames:
+                segments = []
+                for k, g in pd.Series(active_missing_frames).groupby(pd.Series(active_missing_frames).diff().ne(1).cumsum()):
+                    start, end = g.iloc[0], g.iloc[-1]
+                    segments.append([[start, 0], [end, 0], [end, 1], [start, 1]])  # Define shaded area
 
-    # Save as video (using ffmpeg)
+                shading_poly.set_verts(segments)  # Update shading area
+
+        return sc1, line1, shading_poly
+
+    ani = animation.FuncAnimation(fig, update, frames=len(full_frame_range), interval=50, blit=True)
     ani.save(output_filename, writer="ffmpeg", fps=10)
-
-    # Close the plot
     plt.close(fig)
 
 
 if __name__ == '__main__':
     gt_file = os.path.join(DATA_PATH, 'gt.pkl')
-    preds_file = os.path.join(DATA_PATH, 'preds_pred_off-shelf_truck.pkl')
+    preds_file = os.path.join(DATA_PATH, 'preds_pred_B_fold1.pkl')
 
     gt = read_pickle(gt_file)
     gt = correct_gt_pickle(gt)
