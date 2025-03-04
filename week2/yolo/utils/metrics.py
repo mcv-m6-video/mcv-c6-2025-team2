@@ -1,7 +1,6 @@
 import numpy as np
 from typing import Optional, Dict, List
 from dataclasses import dataclass
-from collections import defaultdict
 
 @dataclass
 class Bbox:
@@ -65,7 +64,7 @@ def voc_eval(
     """
     ap_per_frame = {}
 
-    for image_id in gt.keys():
+    for image_id in preds.keys():
         # Get ground truth for the frame
         annotations = gt.get(image_id, [])
         bboxes_gt = np.array([[ann.bbox.x1, ann.bbox.y1, ann.bbox.x2, ann.bbox.y2] for ann in annotations])
