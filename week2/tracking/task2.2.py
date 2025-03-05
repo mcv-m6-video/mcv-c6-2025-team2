@@ -5,6 +5,9 @@ import cv2
 from tqdm import tqdm
 from sort import Sort
 import xml.etree.ElementTree as ET
+import os
+import pickle
+import json  # Para guardar los resultados en formato JSON
 
 import sys
 sys.path.append("week2/") 
@@ -70,41 +73,40 @@ def track_objects_in_frame(detections, tracker):
     
     return tracked_objects, processing_time
 
-
 def visualize_tracked_objects(image, tracked_objects, object_colors):
     """
     Draw tracked objects on the image with their IDs, using distinct colors for each object.
+    Los cuadros se dibujan con mayor grosor y los IDs se muestran en un tamaño de fuente mayor.
     """
-    # Create a copy of the image to avoid modifying the original
+    # Crear una copia de la imagen para no modificar la original
     result_image = image.copy()
     
     for d in tracked_objects:
-        x1, y1, x2, y2, obj_id = d  # Unpack coordinates and object ID
+        x1, y1, x2, y2, obj_id = d  # Desempaquetar coordenadas e ID del objeto
         obj_id = int(obj_id)
         
-        # Assign a unique color if the object ID is new
+        # Asignar un color único si el objeto es nuevo
         if obj_id not in object_colors:
-            np.random.seed(obj_id)  # Seed with object ID to ensure consistency
+            np.random.seed(obj_id)  # Semilla con el objeto ID para asegurar consistencia
             object_colors[obj_id] = tuple(map(int, np.random.randint(0, 255, size=3)))
         
         color = object_colors[obj_id]
         
-        # Draw the detection rectangle
-        cv2.rectangle(result_image, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
+        # Dibujar el rectángulo de detección con mayor grosor (por ejemplo, 8 píxeles)
+        cv2.rectangle(result_image, (int(x1), int(y1)), (int(x2), int(y2)), color, 4)
         
-        # Add text with the object ID
+        # Añadir el texto con el ID del objeto en tamaño mayor (fuente 1.0 y grosor 3)
         cv2.putText(
             result_image, 
             f"ID:{obj_id}", 
-            (int(x1), int(y1) - 5), 
+            (int(x1), int(y1) - 10), 
             cv2.FONT_HERSHEY_SIMPLEX, 
-            0.5, 
+            1.0, 
             color, 
-            2
+            3
         )
     
     return result_image, object_colors
-
 
 def get_tracking(detections_dict: dict, image_folder: str, 
                  generate_video: bool=False, fps: int=30, output_video_path:str="tracking_results.mp4"):
@@ -192,19 +194,74 @@ def get_tracking(detections_dict: dict, image_folder: str,
     return stats
 
 
+def process_detections_in_folder(detections_folder, frames_dir, gt_file_path, output_results_path):
+    # Cargar las anotaciones de GT
+    gt_bboxes = parse_bboxes_from_xml(gt_file_path)
+
+    # Inicializar una lista para almacenar los resultados de HOTA e IDF1
+    all_results = []
+
+    # Iterar sobre los archivos en la carpeta de detecciones
+    for filename in tqdm(os.listdir(detections_folder), desc="Processing detection files", unit="file"):
+        if filename.endswith('.pkl'):
+            # Cargar las detecciones desde el archivo
+            detection_file_path = os.path.join(detections_folder, filename)
+            with open(detection_file_path, "rb") as f:
+                detections = pickle.load(f)
+
+            # Obtener los resultados de tracking
+            tracking_stats = get_tracking(detections, frames_dir, 
+                                        generate_video=False, fps=10, output_video_path=None)
+
+            if tracking_stats:
+                print(f"=== Tracking Statistics for {filename} ===")
+                print(f"Total tracker detections: {tracking_stats['num_tracker_dets']}")
+                print(f"Total unique tracker IDs: {tracking_stats['num_tracker_ids']}")
+
+            # Crear los datos para la evaluación de HOTA
+            data = create_data_for_hota(gt_bboxes, tracking_stats)
+            
+            # Calcular HOTA y IDF1
+            hota_metric = HOTA()
+            iden = Identity()
+
+            # Evaluar las métricas
+            hota_result = hota_metric.eval_sequence(data)
+            idf1_result = iden.eval_sequence(data)
+
+            # Almacenar los resultados en el formato deseado
+            result = {
+                'filename': filename,
+                'HOTA(0)': hota_result['HOTA(0)'],
+                'IDF1': idf1_result['IDF1']
+            }
+            all_results.append(result)
+
+    # Guardar los resultados en un archivo JSON
+    with open(output_results_path, 'w') as result_file:
+        json.dump(all_results, result_file, indent=4)
+
+
 if __name__ == "__main__":
-    
-    # Read the detections
-    with open("week2/tracking/preds_pred_off-shelf.pkl", "rb") as f:
-        seq_dets = pickle.load(f)
+    # # Definir las rutas
+    # detections_folder = "week2/tracking/to_reformat"  # La carpeta con los archivos .pkl
+    # frames_dir = 'data/AICity_data/frames'  # La carpeta de frames
+    # gt_file_path = '/Users/arnaubarrera/Desktop/MSc Computer Vision/C6. Video Analysis/mcv-c6-2025-team2/data/ai_challenge_s03_c010-full_annotation.xml'  # El archivo de GT
+    # output_results_path = 'tracking_results_original.json'  # El archivo donde se guardarán los resultados
+
+    # # Llamar a la función para procesar las detecciones
+    # process_detections_in_folder(detections_folder, frames_dir, gt_file_path, output_results_path)
+
+    with open("/Users/arnaubarrera/Desktop/MSc Computer Vision/C6. Video Analysis/mcv-c6-2025-team2/week2/tracking/to_reformat/preds_pred_B_fold3_wholevid.pkl", "rb") as f:
+        detections = pickle.load(f)
     
     # Prepare data for tracker
-    detections = reformat_detections(seq_dets, start_number=535)
+    # detections = reformat_detections(seq_dets, start_number=535)
     frames_dir = 'data/AICity_data/frames'
 
     # Process tracking and optionally create visualization
     tracking_stats = get_tracking(detections, frames_dir, 
-                                  generate_video=True, fps=10, output_video_path="object_tracking.mp4")
+                                  generate_video=True, fps=30, output_video_path="object_tracking.mp4")
     
     # Print statistics
     if tracking_stats:

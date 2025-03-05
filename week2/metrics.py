@@ -41,7 +41,7 @@ def parse_xml_HOTA(file_path: str) -> dict:
     result = {
         "num_gt_dets": num_gt_dets,
         "num_gt_ids": num_gt_ids,
-        "gt_ids": [np.array(gt_ids[frame]) for frame in sorted(gt_ids.keys()) if frame >= 535]
+        "gt_ids": [np.array(gt_ids[frame]) for frame in sorted(gt_ids.keys()) if frame >= 0]
     }
 
     return result
@@ -75,7 +75,7 @@ def parse_bboxes_from_xml(file_path):
             frames_dict[frame_number].append([xtl, ytl, xbr, ybr])
 
     # Crear una lista de listas ordenada por los frames
-    min_frame = 535
+    min_frame = 0
     max_frame = max(frames_dict.keys())  # Obtener el último frame
     frame_list = []
     
