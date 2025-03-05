@@ -5,6 +5,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
+from tqdm import tqdm
 from utils.metrics import Annotation, Prediction, compute_mAP
 from evaluate import read_pickle, correct_gt_pickle, correct_preds_pickle
 from natsort import natsorted
@@ -156,7 +157,6 @@ def save_moving_average_video(mAP_dict: Dict[str, float], window_size=10, output
     ani.save(output_filename, writer="ffmpeg", fps=10)
     plt.close(fig)
 
-<<<<<<< HEAD
 def generate_gif_from_video(video_path: str, output_path: str, sampling: int = 5):
     """
     Generates a GIF from a video file.
@@ -230,7 +230,6 @@ def plot_for_slide_7(
     plt.close(fig)
 
 
-=======
 def darken_image(image_path, factor=0.3, resize_to=(384, 216)):
     """Darken an image, resize it, and add larger 'TRAIN' text."""
     image = Image.open(image_path).convert("RGB")
@@ -304,7 +303,6 @@ def generate_kfolds_gif(main_dir, backup_dir, output_gif, duration=100, resize_t
         print(f"GIF saved as {output_gif} (Optimized)")
     else:
         print("No frames found to create GIF.")
->>>>>>> 40b92bd4b187f0a4a8d50f516792b375d7045c58
 
 if __name__ == '__main__':
 
