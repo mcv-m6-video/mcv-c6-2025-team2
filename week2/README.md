@@ -73,13 +73,15 @@ Two key issues contributed to this lower-than-expected performance:
 **Class Assignment Issues:** The model classified only the bicycle itself, whereas the ground truth included both the bicycle and its rider as a single object. This mismatch led to classification errors and a reduction in precision.
 To address these issues, further improvements were made through fine-tuning
 
-
 ### Task 1.2: Fine-tune to your data
 Fine-tuning was performed using a subset of our video, specifically, 25% of the frames were used for training, while the remaining 75% were reserved for testing.
 
 A key experiment involved freezing different numbers of layers (0, 5, 10, 15, 20) to analyze their impact on performance. Training was conducted for up to 300 epochs, with early stopping mechanisms to prevent unnecessary computations and avoid overfitting. Interestingly, there was no significant overfitting observed, as test losses were generally lower than training losses due to the effects of data augmentation.
 
 After fine-tuning, the performance improved significantly, with the fine-tuned model achieving a much higher mAP score compared to the off-the-shelf version. The frozen layers experiment demonstrated that keeping all layers trainable (freezing 0 layers) provided the best results, leading to this configuration being used in subsequent experiments.
+
+<img src="figs/time_vs_numfrozen.png" width="400">
+<img src="figs/mAP_vs_numfrozen.png" width="400">
 
 ### Task 1.3: K-Fold Cross-validation
 To evaluate the robustness of the fine-tuned model, two cross-validation strategies were tested:
@@ -120,8 +122,12 @@ However, some tracking errors persisted. For instance:
 - If an object (such as a van) followed a trajectory that didn't match the assumed motion model (e.g., taking a sharp turn), the tracker could misassign IDs.
 - If an object was intermittently missed in detections, the tracker might fail to properly reassign its previous ID.
 
+
 ### Task 2.3: IDF1, HOTA scores
 To quantitatively assess the performance of the two tracking methods, IDF1 and HOTA scores were used. These metrics measure how consistently an object retains the same ID across frames, factoring in both accuracy and association quality.
 
 The Kalman-based tracker significantly outperformed the IoU-based tracker, achieving higher IDF1 and HOTA scores. This confirmed that incorporating motion modeling via Kalman filtering substantially improved tracking reliability.
 
+
+<img src="figs/overlap_metrics.png" width="400">
+<img src="figs/kalman_metrics.png" width="400">
