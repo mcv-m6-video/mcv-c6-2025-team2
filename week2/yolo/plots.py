@@ -7,8 +7,9 @@ import matplotlib.animation as animation
 
 from utils.metrics import Annotation, Prediction, compute_mAP
 from evaluate import read_pickle, correct_gt_pickle, correct_preds_pickle
+from natsort import natsorted
 from typing import List, Dict, Tuple
-from PIL import Image
+from PIL import Image, ImageEnhance, ImageDraw, ImageFont
 from concurrent.futures import ThreadPoolExecutor
 from matplotlib.collections import PolyCollection
 
@@ -155,6 +156,7 @@ def save_moving_average_video(mAP_dict: Dict[str, float], window_size=10, output
     ani.save(output_filename, writer="ffmpeg", fps=10)
     plt.close(fig)
 
+<<<<<<< HEAD
 def generate_gif_from_video(video_path: str, output_path: str, sampling: int = 5):
     """
     Generates a GIF from a video file.
@@ -228,6 +230,81 @@ def plot_for_slide_7(
     plt.close(fig)
 
 
+=======
+def darken_image(image_path, factor=0.3, resize_to=(384, 216)):
+    """Darken an image, resize it, and add larger 'TRAIN' text."""
+    image = Image.open(image_path).convert("RGB")
+
+    # Resize to reduce memory usage
+    if resize_to:
+        image = image.resize(resize_to, Image.Resampling.LANCZOS)
+
+    # Darken the image
+    enhancer = ImageEnhance.Brightness(image)
+    darkened_image = enhancer.enhance(factor)
+
+    # Add larger text
+    draw = ImageDraw.Draw(darkened_image)
+    
+    try:
+        font = ImageFont.truetype("arial.ttf", 100)
+    except IOError:
+        font = ImageFont.load_default()  # Fallback if font file is missing
+
+    text = "(TRAINING SET)"
+    
+    # Get text bounding box (replaces textsize)
+    bbox = draw.textbbox((0, 0), text, font=font)
+    text_width, text_height = bbox[2] - bbox[0], bbox[3] - bbox[1]
+
+    # Center the text
+    text_position = ((darkened_image.width - text_width) // 2, (darkened_image.height - text_height) // 2)
+    
+    draw.text(text_position, text, fill=(255, 255, 255), font=font)
+
+    return darkened_image
+
+
+def generate_kfolds_gif(main_dir, backup_dir, output_gif, duration=100, resize_to=(384, 216), frame_step=10):
+    """Generate a compressed GIF from frames, skipping some for efficiency."""
+    frames = []
+    frame_numbers = range(0, 2141, frame_step)  # Sample every 'frame_step' frames
+    
+    for num in tqdm(frame_numbers, desc="Processing frames"):
+        filename = f"frame_{num:04d}.jpg"
+        main_path = os.path.join(main_dir, filename)
+        backup_path = os.path.join(backup_dir, filename)
+
+        if os.path.exists(main_path):
+            frame = Image.open(main_path).convert("RGB")
+        elif os.path.exists(backup_path):
+            frame = darken_image(backup_path, resize_to=resize_to)
+        else:
+            print(f"Warning: Frame {filename} is missing in both directories!")
+            continue
+        
+        # Resize to reduce memory usage
+        if resize_to:
+            frame = frame.resize(resize_to, Image.Resampling.LANCZOS)  # Updated resizing method
+
+        # Reduce color depth
+        frame = frame.convert("P", palette=Image.ADAPTIVE)
+
+        frames.append(frame)
+
+    if frames:
+        frames[0].save(
+            output_gif,
+            save_all=True,
+            append_images=frames[1:],
+            duration=duration,
+            loop=0,
+            optimize=True
+        )
+        print(f"GIF saved as {output_gif} (Optimized)")
+    else:
+        print("No frames found to create GIF.")
+>>>>>>> 40b92bd4b187f0a4a8d50f516792b375d7045c58
 
 if __name__ == '__main__':
 

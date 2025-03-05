@@ -1,14 +1,14 @@
 from ultralytics import YOLO
 
 # Load a model
-model = YOLO("yolo11m.pt")
+model = YOLO("yolo11x.pt")
 
 # Train the model
 # https://docs.ultralytics.com/modes/train/#train-settings
 results = model.train(
-    data="./config/task1.2.yaml",
-    epochs=1,
-    patience = 200,  # No crec que tingui sentit posar aqui 200 si les epochs son 100
+    data="./config/task1.3.yaml",
+    epochs=300,
+    patience = 50,
     batch = 2,
     imgsz = 640,
     save = True,
@@ -16,7 +16,7 @@ results = model.train(
     cache = False,
     device = 0,
     workers = 8,
-    project = 'task1.2_output',
+    project = 'task1.3_output',
     name = 'train_A',
     pretrained = True,
     optimizer = 'auto',
