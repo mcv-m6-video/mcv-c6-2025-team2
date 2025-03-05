@@ -37,6 +37,20 @@ To log your trainings in WandB, run the following command in your CLI:
 yolo settings wandb=True
 ```
 
+### Training YOLOv11
+To run training, set the desired data paths in a new or existing `.yaml` configuration file, found in `yolo/config`. Also set the desired parameters in the file `yolo/train_yolov11.py`. Then, you are ready to run training:
+
+```
+python yolo/train_yolov11.py
+```
+
+### Inference with YOLOv11
+To run inference, you just need to adjust your custom parameters in the file `yolo/pred_yolov11.py`, and then run it:
+
+```
+python yolo/pred_yolov11.py
+```
+
 ## ➡️ Task 1: Object Detection
 TODO
 
