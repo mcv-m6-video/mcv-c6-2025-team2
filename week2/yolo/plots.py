@@ -63,10 +63,10 @@ def save_to_gif(frames: List[Image.Image], filename: str, sampling: int = 5):
     Saves a list of PIL images as a GIF file.
     """
     print('Saving GIF...')
-    frames[0].save(filename, save_all=True, append_images=frames[sampling:-1:sampling], duration=50, loop=0)
+    frames[0].save(filename, save_all=True, append_images=frames[sampling:-1:sampling], duration=100, loop=0)
 
 
-def plot_moving_average_video(mAP_dict: Dict[str, float], window_size=10, output_filename="mAP_evolution.mp4"):
+def save_moving_average_video(mAP_dict: Dict[str, float], window_size=10, output_filename="mAP_evolution.mp4"):
     """
     Generates a video showing the evolution of the moving average plot over frames, 
     dynamically shading missing training frames as the animation progresses.
@@ -77,7 +77,6 @@ def plot_moving_average_video(mAP_dict: Dict[str, float], window_size=10, output
     full_frame_range = np.arange(0, 2141)
     present_frames = set(frame_numbers)
     missing_frames = [num for num in full_frame_range if num not in present_frames]
-
     mAP_series = pd.Series({num: mAP_dict.get(f"frame_{num:04d}.jpg", np.nan) for num in full_frame_range})
     moving_avg = mAP_series.rolling(window=window_size, min_periods=1).mean()
 
@@ -85,8 +84,8 @@ def plot_moving_average_video(mAP_dict: Dict[str, float], window_size=10, output
     line_color_1 = '#274857'
     training_shade_color = '#f4cccc'  # Light red
 
-    fig, ax = plt.subplots(figsize=(10, 5))
-    ax.set_xlim(0, max(frame_numbers))
+    fig, ax = plt.subplots(figsize=(5, 4))
+    ax.set_xlim(0, max(full_frame_range))
     ax.set_ylim(0, 1)
     ax.set_xlabel("Frame")
     ax.set_ylabel("mAP")
@@ -102,7 +101,11 @@ def plot_moving_average_video(mAP_dict: Dict[str, float], window_size=10, output
     ax.add_collection(shading_poly)
 
     # Get first element position in numpy array with np.nan
-    first_nan = np.where(np.isnan(mAP_series))[0][0] + 10
+    first_nan = 2141
+    try:
+        first_nan = np.where(np.isnan(mAP_series))[0][0] + 10
+    except IndexError:
+        pass
 
     def update(frame, first_nan):
         x_data = full_frame_range[:frame + 1]  # Full range up to current frame
@@ -135,7 +138,7 @@ def plot_moving_average_video(mAP_dict: Dict[str, float], window_size=10, output
 
         # Update the shading dynamically
         if missing_frames:
-            current_max_frame = x_data[-1]  # The frame currently being animated
+            current_max_frame = frame + 1
             active_missing_frames = [f for f in missing_frames if f <= current_max_frame]
 
             if active_missing_frames:
@@ -152,22 +155,114 @@ def plot_moving_average_video(mAP_dict: Dict[str, float], window_size=10, output
     ani.save(output_filename, writer="ffmpeg", fps=10)
     plt.close(fig)
 
+def generate_gif_from_video(video_path: str, output_path: str, sampling: int = 5):
+    """
+    Generates a GIF from a video file.
+    """
+    cap = cv2.VideoCapture(video_path)
+    frames = []
+
+    while cap.isOpened():
+        ret, frame = cap.read()
+
+        if not ret:
+            break
+
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        frames.append(Image.fromarray(frame))
+
+    cap.release()
+    cv2.destroyAllWindows()
+
+    save_to_gif(frames, output_path, sampling=sampling)
+
+def delete_video(video_path: str):
+    """
+    Deletes a video file.
+    """
+    os.remove(video_path)
+
+
+def plot_for_slide_7(
+    all_maps: List[Dict[str, float]],
+    output_filename: str
+):
+    assert len(all_maps) == 4, "Please provide 4 sets of mAPs."
+    
+    """
+    Plots the predictions for slide 7.
+    """
+    fig, ax = plt.subplots(figsize=(5, 4))
+    ax.set_xlim(0, 2141)
+    ax.set_ylim(0.4, 1)
+    ax.set_xlabel("Frame")
+    ax.set_ylabel("mAP")
+    ax.set_title("mAP Evolution Over Time")
+
+    colors = ['b', 'r', 'g', 'y']
+    labels = ['fold1', 'fold2', 'fold3', 'fold4']
+    
+    # Create scatter plots with labels for the legend
+    scatter_plots = [ax.scatter([], [], marker='o', color=color, s=2, alpha=0.25, label=label) 
+                     for color, label in zip(colors, labels)]
+    
+    # Add legend with larger, opaque markers
+    legend = ax.legend(loc="lower right", fontsize=10, markerscale=5)  # Increase marker size in legend
+
+    full_frame_range = np.arange(0, 2141)
+    mAP_series_list = [pd.Series({num: maps.get(f"frame_{num:04d}.jpg", np.nan) for num in full_frame_range}) 
+                       for maps in all_maps]
+
+    def update(frame):
+        x_data = full_frame_range[:frame + 1]
+
+        for i, scatter in enumerate(scatter_plots):
+            y_data = mAP_series_list[i][:frame + 1]
+            valid_indices = ~np.isnan(y_data)
+            scatter.set_offsets(np.column_stack((x_data[valid_indices], y_data[valid_indices])))
+
+        return scatter_plots
+
+    ani = animation.FuncAnimation(fig, update, frames=2141, interval=50, blit=True)
+    ani.save(output_filename, writer="ffmpeg", fps=10)
+    plt.close(fig)
+
+
 
 if __name__ == '__main__':
-    gt_file = os.path.join(DATA_PATH, 'gt.pkl')
-    preds_file = os.path.join(DATA_PATH, 'preds_pred_B_fold1.pkl')
 
+    plot_type = 'slide_7'
+
+    gt_file = os.path.join(DATA_PATH, 'gt.pkl')
     gt = read_pickle(gt_file)
     gt = correct_gt_pickle(gt)
 
-    preds = read_pickle(preds_file)
-    preds = correct_preds_pickle(preds)
+    if plot_type == 'ma':
+        name = 'preds_pred_off-shelf_truck'
+        preds_file = os.path.join(DATA_PATH, f'{name}.pkl')
 
-    mAPs = compute_mAP(gt, preds, aggregated=False)
-    frames = plot_moving_average_video(mAPs, window_size=10, output_filename='plot.mp4')
+        preds = read_pickle(preds_file)
+        preds = correct_preds_pickle(preds)
 
-    # video_frames = video_gt_preds(gt, preds)
-    # save_to_gif(video_frames, 'video.gif')
+        mAPs = compute_mAP(gt, preds, aggregated=False)
+        frames = save_moving_average_video(mAPs, window_size=10, output_filename=f'{name}.mp4')
+        generate_gif_from_video(f'{name}.mp4', f'{name}.gif', sampling=10)
+        delete_video(f'{name}.mp4')
+    elif plot_type == 'slide_7':
+        all_maps = []
+        for fold in range(4):
+            name = f'preds_pred_C_fold{fold}'
+            preds_file = os.path.join(DATA_PATH, f'{name}.pkl')
+            preds = read_pickle(preds_file)
+            preds = correct_preds_pickle(preds)
+            mAPs = compute_mAP(gt, preds, aggregated=False)
+            all_maps.append(mAPs)
+
+        plot_for_slide_7(all_maps, 'slide7.mp4')
+        generate_gif_from_video('slide7.mp4', 'slide7.gif', sampling=10)
+        delete_video('slide7.mp4')
+    else:
+        raise ValueError("Invalid plot type.")
 
 
     
