@@ -129,5 +129,7 @@ To quantitatively assess the performance of the two tracking methods, IDF1 and H
 The Kalman-based tracker significantly outperformed the IoU-based tracker, achieving higher IDF1 and HOTA scores. This confirmed that incorporating motion modeling via Kalman filtering substantially improved tracking reliability.
 
 
-<img src="figs/overlap_metrics.png" width="400">
+Maximum overlap tracking on the left and Kalman on the right, beware that the y axis is different in both plots.
+
+<img src="figs/maxoverlap_metrics.png" width="400">
 <img src="figs/kalman_metrics.png" width="400">
